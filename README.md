@@ -30,3 +30,5 @@
 <p align="center">
   <img src="./Node red.jpg" alt="รูปภาพการต่อวงจร" width="800">
 </p>
+
+ใน Function Block ให้ใส่โค๊ดที่เปะไว้ให้ ชื่อ "code in function block"
