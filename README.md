@@ -28,5 +28,5 @@
 ## การต่อ Node red
 
 <p align="center">
-  <img src="Node red.png" alt="รูปภาพการต่อวงจร" width="500">
+  <img src="./Node red.jpg" alt="รูปภาพการต่อวงจร" width="800">
 </p>
