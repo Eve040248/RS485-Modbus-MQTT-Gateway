@@ -1,0 +1,25 @@
+let data = msg.payload;
+if (typeof data === "string") {
+    data = JSON.parse(data);
+}
+
+let meter_id = msg.topic.split("/").pop(); 
+
+msg.payload = [
+    {
+        voltage: Number(data.voltage),
+        current: Number(data.current),
+        power: Number(data.power),
+        power_factor: Number(data.power_factor),
+        apparent_power: Number(data.apparent_power),
+        reactive_power: Number(data.reactive_power),
+        energy: Number(data.energy),
+        success_count: Number(data.success_count),
+        fail_count: Number(data.fail_count)
+    },
+    {
+        meter: meter_id 
+    }
+];
+
+return msg;
