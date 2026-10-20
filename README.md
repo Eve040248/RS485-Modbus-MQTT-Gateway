@@ -1,7 +1,7 @@
 # เเผนการทำงาน
 
 <p align="center">
-  <img src="workflow.jpg" width="800">
+  <img src="เเผนการทำงาน.jpg" width="800">
 </p>
 
 ## รูปภาพการต่อวงจร
