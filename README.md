@@ -2,7 +2,7 @@
 
 
 <p align="center">
-  <img src="เเผนการทำงาน new.jpg" width="1000">
+  <img src="เเผนการทำงาน new.jpg" width="*900">
 </p>
 
 ## รูปภาพการต่อวงจร
