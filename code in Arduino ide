@@ -19,7 +19,7 @@ PubSubClient mqtt_client(wifi_client);
 WebServer web_server(80);
 
 // =====================================================
-// RS485
+// RS485 Pin Setup
 // =====================================================
 #define PIN_RS485_RX 16
 #define PIN_RS485_TX 17
@@ -29,8 +29,8 @@ ModbusMaster pzem_meter;
 // =====================================================
 // ตั้งค่าระบบ
 // =====================================================
-uint8_t meter1_address = 1; // slave id ตั้งตามที่เราตั้งไว้ใน Modbus Poll
-uint8_t meter2_address = 2; // slave id ตั้งตามที่เราตั้งไว้ใน Modbus Poll
+uint8_t meter1_address = 1;
+uint8_t meter2_address = 2;
 unsigned long read_interval_ms = 1000;
 
 // =====================================================
@@ -42,10 +42,11 @@ unsigned long meter2_success_count = 0;
 unsigned long meter2_fail_count = 0;
 
 // =====================================================
-// ค่า Threshold สำหรับตรวจจับความผิดปกติ
+// ค่า Threshold สำหรับตรวจจับความผิดปกติ (รวม OVERVOLTAGE)
 // =====================================================
 float undervoltage_threshold = 200.0;
-float overcurrent_threshold = 10.0;
+float overvoltage_threshold  = 240.0;
+float overcurrent_threshold  = 10.0;
 
 // =====================================================
 // Timer
@@ -76,7 +77,7 @@ void setup_wifi() {
 }
 
 // =====================================================
-// MQTT Reconnect
+// MQTT Reconnect Management
 // =====================================================
 void maintain_mqtt(unsigned long current_time) {
   if (!mqtt_client.connected()) {
@@ -97,17 +98,25 @@ void maintain_mqtt(unsigned long current_time) {
 }
 
 // =====================================================
-// ตรวจสอบความผิดปกติ
+// ตรวจสอบความผิดปกติ (UNDERVOLTAGE / OVERVOLTAGE / OVERCURRENT)
 // =====================================================
 String check_abnormal_condition(float voltage, float current) {
   String warning = "";
 
+  // 1. ตรวจจับแรงดันตก
   if (voltage < undervoltage_threshold) {
     warning += "UNDERVOLTAGE";
     Serial.print("WARNING: Undervoltage detected! V=");
     Serial.println(voltage);
   }
+  // 2. ตรวจจับแรงดันเกิน
+  else if (voltage > overvoltage_threshold) {
+    warning += "OVERVOLTAGE";
+    Serial.print("WARNING: Overvoltage detected! V=");
+    Serial.println(voltage);
+  }
 
+  // 3. ตรวจจับกระแสเกิน
   if (current > overcurrent_threshold) {
     if (warning.length() > 0) {
       warning += ",";
@@ -125,7 +134,7 @@ String check_abnormal_condition(float voltage, float current) {
 }
 
 // =====================================================
-// ส่ง Alarm ผ่าน MQTT
+// ส่ง Alarm ผ่าน MQTT Topic (home/pzem/{meter_id}/alarm)
 // =====================================================
 void send_alarm(uint8_t meter_id, float voltage, float current, String warning) {
   if (!mqtt_client.connected()) {
@@ -148,7 +157,7 @@ void send_alarm(uint8_t meter_id, float voltage, float current, String warning) 
 }
 
 // =====================================================
-// อ่าน PZEM
+// อ่านค่าจาก PZEM-016 และส่งข้อมูลขึ้น MQTT
 // =====================================================
 void read_and_send_pzem(uint8_t meter_id) {
   pzem_meter.begin(meter_id, Serial2);
@@ -157,7 +166,7 @@ void read_and_send_pzem(uint8_t meter_id) {
   uint8_t retries = 3;
 
   while (retries > 0) {
-    // Clear RS485 buffer
+    // ล้างค่า Buffer ในสาย RS485 ก่อนอ่าน
     while (Serial2.available()) {
       Serial2.read();
     }
@@ -177,11 +186,10 @@ void read_and_send_pzem(uint8_t meter_id) {
   }
 
   // ===================================================
-  // อ่านสำเร็จ
+  // กรณีอ่านสำเร็จ
   // ===================================================
   if (read_status == pzem_meter.ku8MBSuccess) {
     
-    // บันทึกสถิติสำเร็จ
     if (meter_id == meter1_address) {
       meter1_success_count++;
     } else if (meter_id == meter2_address) {
@@ -189,12 +197,8 @@ void read_and_send_pzem(uint8_t meter_id) {
     }
 
     float meter_voltage = pzem_meter.getResponseBuffer(0x0000) / 10.0;
-    
-    // แก้ไขวงเล็บ casting ให้ถูกต้อง
     float meter_current = (((uint32_t)pzem_meter.getResponseBuffer(0x0002) << 16) | pzem_meter.getResponseBuffer(0x0001)) / 1000.0;
     float meter_power = (((uint32_t)pzem_meter.getResponseBuffer(0x0004) << 16) | pzem_meter.getResponseBuffer(0x0003)) / 10.0;
-    
-    // ดึงค่าพลังงานสะสม (Energy) หน่วยเป็น Wh และแปลงเป็น kWh
     float meter_energy_kwh = (((uint32_t)pzem_meter.getResponseBuffer(0x0006) << 16) | pzem_meter.getResponseBuffer(0x0005)) / 1000.0;
     
     float meter_pf = pzem_meter.getResponseBuffer(0x0008) / 100.0;
@@ -207,9 +211,7 @@ void read_and_send_pzem(uint8_t meter_id) {
 
     String warning = check_abnormal_condition(meter_voltage, meter_current);
 
-    // =================================================
-    // Serial Monitor (แสดงจำนวนนับ และค่า kWh)
-    // =================================================
+    // พิมพ์ค่าลง Serial Monitor
     Serial.printf(
       "[Meter: %d] V:%.1f | I:%.3f | P:%.1f | PF:%.2f | S:%.1f | Q:%.1f | E:%.3f kWh | STATUS:%s | OK:%lu | FAIL:%lu\n",
       meter_id, meter_voltage, meter_current, meter_power, meter_pf, apparent_power, reactive_power, meter_energy_kwh, warning.c_str(),
@@ -217,9 +219,7 @@ void read_and_send_pzem(uint8_t meter_id) {
       (meter_id == meter1_address) ? meter1_fail_count : meter2_fail_count
     );
 
-    // =================================================
-    // ส่งข้อมูล MQTT
-    // =================================================
+    // ส่งข้อมูล JSON ขึ้น MQTT
     if (mqtt_client.connected()) {
       StaticJsonDocument<512> doc;
 
@@ -232,7 +232,6 @@ void read_and_send_pzem(uint8_t meter_id) {
       doc["energy"] = meter_energy_kwh;
       doc["status"] = warning;
       
-      // ส่งจำนวนนับขึ้น MQTT
       doc["success_count"] = (meter_id == meter1_address) ? meter1_success_count : meter2_success_count;
       doc["fail_count"] = (meter_id == meter1_address) ? meter1_fail_count : meter2_fail_count;
 
@@ -245,16 +244,16 @@ void read_and_send_pzem(uint8_t meter_id) {
       mqtt_client.publish(mqtt_topic_path, json_payload);
       mqtt_client.loop();
 
+      // หากสถานะไม่ใช่ NORMAL ให้ยิง Alarm ออกทันที
       if (warning != "NORMAL") {
         send_alarm(meter_id, meter_voltage, meter_current, warning);
       }
     }
   }
   // ===================================================
-  // อ่านไม่สำเร็จ
+  // กรณีอ่านล้มเหลว
   // ===================================================
   else {
-    // บันทึกสถิติล้มเหลว
     if (meter_id == meter1_address) {
       meter1_fail_count++;
     } else if (meter_id == meter2_address) {
@@ -271,7 +270,7 @@ void read_and_send_pzem(uint8_t meter_id) {
 }
 
 // =====================================================
-// Web Page
+// Web Page UI
 // =====================================================
 void handle_root() {
   String html = R"rawliteral(
@@ -302,5 +301,4 @@ button:hover { background: #1976D2; }
 <label>Meter 1 Address</label>
 <input type="number" name="addr1" min="1" max="247" value="%ADDR1%">
 
-<label>Meter 2 Address</label>
-<input type="number" name="addr2" min="1" max="247" value="%ADDR2%"
+<label>Meter 2 Address</lab
