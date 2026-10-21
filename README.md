@@ -1,7 +1,7 @@
 # เเผนการทำงาน
 
 <p align="center">
-  <img src="เเผนการทำงาน new.jpg" width="800">
+  <img src="เเผนการทำงาน new.jpg" width="1000">
 </p>
 
 ## รูปภาพการต่อวงจร
