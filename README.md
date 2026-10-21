@@ -34,4 +34,4 @@
   <img src="Node red new.jpg" width="800">
 </p>
 
-ใน Function Block ให้ใส่โค๊ดที่เปะไว้ให้ ชื่อ "code in function block 1" เเละ "code in function block 2"
+ใน Function Block ให้ใส่โค๊ดที่เเปะไว้ให้ ชื่อ "code in function block 1" เเละ "code in function block 2"
